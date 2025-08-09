@@ -1,0 +1,111 @@
+# STEP 1: Import the pandas library
+import pandas as pd
+
+# STEP 2: Load the Excel file
+df = pd.read_excel("water_data_uog.xlsx", sheet_name="Water - hourly", header=13)
+
+# STEP 3: Use the first row as the actual column headers
+df.columns = df.iloc[0]      # First row contains meter names
+df = df[1:].copy()           # Drop that header row from the data
+
+# STEP 4: Rename the first column to 'DateTime' for clarity
+df.rename(columns={df.columns[0]: "DateTime"}, inplace=True)
+
+# STEP 5: Convert 'DateTime' column to proper datetime format
+df["DateTime"] = pd.to_datetime(df["DateTime"], format="%Y-%m-%d %H:%M:%S", errors='coerce')
+
+# STEP 6: Create a new cleaned dataframe called df2
+df2 = df.copy()
+
+# STEP 7: Clean column names to remove spaces, newlines, and slashes
+df2.columns = df2.columns.str.strip()                       # remove extra spaces
+df2.columns = df2.columns.str.replace('\n', ' ')            # replace new lines with space
+df2.columns = df2.columns.str.replace(r'\\', '', regex=True)  # remove any backslashes
+
+# Optional: Rename long meter names to short friendly names
+df2.rename(columns={
+    'Central Services Boiler Room Water [m³] [Central Services]': 'Central Services',
+    'Dome/Tudor Water [m³] [The Dome]': 'Dome',
+    'Dreadnought Main Incomer Water [m³] [Dreadnought]': 'Dreadnought',
+    'MED Anson Water [m³] [Anson]': 'Anson'
+}, inplace=True)
+
+
+# STEP 8: Convert all columns (except DateTime) to numbers
+for col in df2.columns[1:]:  # skip the first column (DateTime)
+    df2[col] = pd.to_numeric(df2[col], errors='coerce')
+
+# STEP 9: Remove rows where the DateTime couldn't be converted (bad or missing dates)
+df2.dropna(subset=["DateTime"], inplace=True)
+
+# STEP 10: Reset index to keep things tidy
+df2.reset_index(drop=True, inplace=True)
+
+# ✅ DONE: Show first few rows of clean data
+print(df2.head())
+
+# Total number of rows and columns
+print("Total Rows:", df2.shape[0])
+print("Total Columns:", df2.shape[1])
+
+# Column names
+print("\nColumn Names:")
+print(df2.columns.tolist())
+
+# Info about data types and non-null counts
+print("\nData Info:")
+print(df2.info())
+
+# Summary of missing values in each column
+print("\nMissing Values (per column):")
+print(df2.isnull().sum())
+
+# Percentage of missing values
+print("\nMissing Values (%) per column:")
+print((df2.isnull().sum() / len(df2) * 100).round(2))
+
+# Quick stats for numeric columns
+print("\nSummary Statistics:")
+print(df2.describe())
+
+df2.drop(columns=["Hour"], inplace=True)
+
+df2
+
+import matplotlib.pyplot as plt
+
+# STEP 1: Drop 'Hour' column if still present (precaution)
+df2.drop(columns=["Hour"], inplace=True, errors="ignore")
+
+# STEP 2: Set DateTime as index for time-based analysis (non-destructive)
+df2_time = df2.set_index("DateTime")
+
+# STEP 3: Summary Statistics (Total, Mean, Max, Min)
+total_usage = df2_time.sum()
+average_usage = df2_time.mean()
+max_usage = df2_time.max()
+min_usage = df2_time.min()
+
+# STEP 4: Combine into a summary table
+summary_df = pd.DataFrame({
+    "Total Usage (m³)": total_usage,
+    "Average Hourly Usage": average_usage,
+    "Max Hourly Usage": max_usage,
+    "Min Hourly Usage": min_usage
+})
+
+# Optional: Display the summary neatly
+print("🔍 Water Usage Summary per Building:")
+print(summary_df)
+
+# STEP 5: Line Plot - Hourly Usage Over Time for All Buildings
+plt.figure(figsize=(15, 6))
+for col in df2_time.columns:
+    plt.plot(df2_time.index, df2_time[col], label=col)
+
+plt.title("Hourly Water Usage Over Time (All Buildings)")
+plt.xlabel("Date")
+plt.ylabel("Water Usage (m³)")
+plt.legend()
+plt.tight_layout()
+plt.show()
